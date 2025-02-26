@@ -134,7 +134,6 @@ def callback():
 
         user_tokens[code] = {"access_token": access_token}
         return "Upstox Authentication Successful! You can now use auto-trading."
-
     except Exception as e:
         logger.error(f"Authentication failed: {str(e)}")
         return f"Error: {str(e)}"
