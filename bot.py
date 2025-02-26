@@ -122,18 +122,22 @@ def receive_update():
 def callback():
     """Handle Upstox authentication callback"""
     code = request.args.get("code")
+    
+    # Check if code was received
     if not code:
         return "Authentication failed! No code received."
-
+    
     try:
         session = Session(UPSTOX_API_KEY)
-        session.set_redirect_uri(REDIRECT_URI)
+        session.set_redirect_uri(REDIRECT_URI)  # Ensure REDIRECT_URI is correct
         session.set_api_secret(UPSTOX_API_SECRET)
         session.set_code(code)
         access_token = session.retrieve_access_token()
-
+        
+        # Store user tokens securely
         user_tokens[code] = {"access_token": access_token}
         return "Upstox Authentication Successful! You can now use auto-trading."
+    
     except Exception as e:
         logger.error(f"Authentication failed: {str(e)}")
         return f"Error: {str(e)}"
