@@ -1,10 +1,11 @@
 import os
 import logging
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request
+
 from telegram import Bot, Update
-from telegram.ext import CommandHandler, CallbackContext, MessageHandler, Filters, Updater, Dispatcher
+from telegram.ext import CommandHandler, MessageHandler, Filters, Updater, Dispatcher
+
 from upstox_api.api import Upstox, Session
 
 # Load environment variables
@@ -14,30 +15,31 @@ UPSTOX_API_KEY = os.getenv("98b99c27-06d7-4ba0-b77b-2fd134469c3f")
 UPSTOX_API_SECRET = os.getenv("vkygkh19pb")
 REDIRECT_URI = os.getenv("https://automatedtrading.onrender.com/callback")
 
+# Initialize Flask app
 app = Flask(__name__)
 
-@app.route("/")
-def home():
-    return "Hello, Flask is running!"
-# Logging setup
+# Initialize Telegram Bot
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+# Logging configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Store user authentication tokens
+# Store user access tokens
 user_tokens = {}
 
-# ✅ Start authentication process
-def start(update: Update, context: CallbackContext):
+# Function to start authentication
+def start(update: Update, context):
     chat_id = update.message.chat_id
     auth_url = f"https://api.upstox.com/login/authorization/dialog?response_type=code&client_id={UPSTOX_API_KEY}&redirect_uri={REDIRECT_URI}"
     update.message.reply_text(f"Click [here]({auth_url}) to authenticate Upstox.", parse_mode="Markdown")
 
-# ✅ Handle Upstox authentication callback
+# Handle Upstox authentication callback
 @app.route("/callback")
 def callback():
     code = request.args.get("code")
     if not code:
-        return "❌ Authentication failed! No code received."
+        return "Authentication failed! No code received.", 400
 
     try:
         session = Session(UPSTOX_API_KEY)
@@ -47,47 +49,47 @@ def callback():
         access_token = session.retrieve_access_token()
         
         user_tokens["access_token"] = access_token
-        return "✅ Upstox Authentication Successful! You can now use auto-trading."
+        return "Upstox Authentication Successful! You can now use auto-trading."
 
     except Exception as e:
-        logger.error(f"Authentication Error: {e}")
-        return f"❌ Error: {str(e)}"
+        logger.error(f"Upstox Authentication Error: {str(e)}")
+        return f"Error: {str(e)}", 500
 
-# ✅ Auto-trading function
-def auto_trade(update: Update, context: CallbackContext):
+# Function to start auto-trading
+def auto_trade(update: Update, context):
     chat_id = update.message.chat_id
     if "access_token" not in user_tokens:
-        update.message.reply_text("⚠️ Please authenticate first using /start.")
+        update.message.reply_text("Please authenticate first using /start.")
         return
 
     upstox = Upstox(UPSTOX_API_KEY, user_tokens["access_token"])
     upstox.get_master_contract('NSE_EQ')
 
-    # Fetch user's balance and allocate trade amount
+    # Fetch user's capital and allocate a trade
     balance = upstox.get_balance()["available_margin"]
-    trade_amount = min(balance * 0.4, 5000)  # 40% of balance or max ₹5000
+    trade_amount = min(balance * 0.4, 5000)  # Use 40% of balance or max ₹5000
 
-    update.message.reply_text("🔍 Analyzing market... 📊")
+    update.message.reply_text(f"🔍 Analyzing market... 📊")
 
+    # Example trade - Buy 5 shares of RELIANCE
     try:
-        # Example: Buy 5 shares of RELIANCE
         order = upstox.place_order(
             transaction_type="BUY",
             exchange="NSE_EQ",
             symbol="RELIANCE",
             quantity=5,
             order_type="LIMIT",
-            price=upstox.get_live_feed("RELIANCE")["ltp"],
+            price=upstox.get_live_feed("RELIANCE")["ltp"],  # Get current price
             product="MIS"
         )
-        update.message.reply_text("✅ Trade placed: 5 shares of RELIANCE bought successfully!")
+        update.message.reply_text(f"✅ Trade placed: 5 shares of RELIANCE bought successfully!")
     except Exception as e:
         update.message.reply_text(f"❌ Trade failed: {str(e)}")
 
-# ✅ Portfolio check function
-def portfolio(update: Update, context: CallbackContext):
+# Show portfolio and profit/loss
+def portfolio(update: Update, context):
     if "access_token" not in user_tokens:
-        update.message.reply_text("⚠️ Please authenticate first using /start.")
+        update.message.reply_text("Please authenticate first using /start.")
         return
 
     upstox = Upstox(UPSTOX_API_KEY, user_tokens["access_token"])
@@ -112,22 +114,22 @@ def portfolio(update: Update, context: CallbackContext):
     message += f"\n\n💰 *Total P/L:* ₹{total_pnl:.2f}"
     update.message.reply_text(message, parse_mode="Markdown")
 
-# ✅ Set up Telegram Bot Handlers
+# Setup Telegram Bot Handlers
 updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
-dispatcher = updater.dispatcher
+dispatcher: Dispatcher = updater.dispatcher
+
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CommandHandler("auto_trade", auto_trade))
 dispatcher.add_handler(CommandHandler("portfolio", portfolio))
 dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, lambda update, context: update.message.reply_text("Use /start to begin!")))
 
-# ✅ Telegram Webhook
+# Telegram Bot Webhook Setup
 @app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(), bot)
     dispatcher.process_update(update)
-    return "OK"
+    return "OK", 200
 
-# ✅ Start Flask Server
+# Gunicorn Entry Point
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=10000)
