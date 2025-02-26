@@ -10,10 +10,10 @@ import numpy as np
 
 # Load environment variables
 load_dotenv()
-TELEGRAM_BOT_TOKEN = os.getenv("7762384377:AAGBv8XH8afYgIIN4BMj_nKOVsj-yqYbhVY")
-UPSTOX_API_KEY = os.getenv("98b99c27-06d7-4ba0-b77b-2fd134469c3f")
-UPSTOX_API_SECRET = os.getenv("vkygkh19pb")
-REDIRECT_URI = os.getenv("https://automatedtrading.onrender.com/callback")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+UPSTOX_API_KEY = os.getenv("UPSTOX_API_KEY")
+UPSTOX_API_SECRET = os.getenv("UPSTOX_API_SECRET")
+REDIRECT_URI = os.getenv("REDIRECT_URI")
 
 # Initialize Flask app and Telegram bot
 app = Flask(__name__)
@@ -143,4 +143,4 @@ def callback():
 # Gunicorn Entry Point
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-                                                        
+        
