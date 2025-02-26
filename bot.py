@@ -112,6 +112,13 @@ async def webhook():
     dispatcher.process_update(update)
     return "OK"
 
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    """Handles incoming Telegram updates"""
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return "OK", 200
+
 @app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
 def receive_update():
     try:
