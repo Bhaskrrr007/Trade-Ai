@@ -1,0 +1,6 @@
+telebot
+requests
+flask
+gunicorn
+upstox
+python-dotenv
