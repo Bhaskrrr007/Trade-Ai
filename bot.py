@@ -15,7 +15,7 @@ UPSTOX_API_KEY = os.getenv("98b99c27-06d7-4ba0-b77b-2fd134469c3f")
 UPSTOX_API_SECRET = os.getenv("vkygkh19pb")
 REDIRECT_URI = os.getenv("https://automatedtrading.onrender.com")
 
-# Initialize Flask app
+# Flask App Setup
 app = Flask(__name__)
 
 # Logging Setup
@@ -27,29 +27,24 @@ user_tokens = {}
 
 # Initialize Telegram Bot
 application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-dispatcher = Dispatcher(application.bot, None, workers=4, use_context=True)
 
 # Function to calculate Moving Average (MA) & Relative Strength Index (RSI)
 def get_market_analysis(upstox, symbol):
-    try:
-        historical_data = upstox.get_ohlc(symbol=symbol, interval="15minute", days=5)
-        close_prices = [data["close"] for data in historical_data[-50:]]
+    historical_data = upstox.get_ohlc(symbol=symbol, interval="15minute", days=5)
+    close_prices = [data["close"] for data in historical_data[-50:]]
 
-        # Calculate Moving Averages
-        short_ma = np.mean(close_prices[-10:])
-        long_ma = np.mean(close_prices[-30:])
+    # Calculate Moving Averages
+    short_ma = np.mean(close_prices[-10:])
+    long_ma = np.mean(close_prices[-30:])
 
-        # Calculate RSI
-        gains = [max(close_prices[i] - close_prices[i-1], 0) for i in range(1, len(close_prices))]
-        losses = [max(close_prices[i-1] - close_prices[i], 0) for i in range(1, len(close_prices))]
-        avg_gain = np.mean(gains[-14:])
-        avg_loss = np.mean(losses[-14:])
-        rsi = 100 - (100 / (1 + (avg_gain / avg_loss))) if avg_loss != 0 else 100
+    # Calculate RSI
+    gains = [max(close_prices[i] - close_prices[i-1], 0) for i in range(1, len(close_prices))]
+    losses = [max(close_prices[i-1] - close_prices[i], 0) for i in range(1, len(close_prices))]
+    avg_gain = np.mean(gains[-14:])
+    avg_loss = np.mean(losses[-14:])
+    rsi = 100 - (100 / (1 + (avg_gain / avg_loss))) if avg_loss != 0 else 100
 
-        return short_ma, long_ma, rsi
-    except Exception as e:
-        logger.error(f"Error in market analysis: {str(e)}")
-        return None, None, None
+    return short_ma, long_ma, rsi
 
 # Telegram Bot Command Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -66,25 +61,21 @@ async def trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text="Please authenticate first using /start.")
         return
 
-    try:
-        upstox = Upstox(UPSTOX_API_KEY, user_tokens[chat_id]["access_token"])
-        upstox.get_master_contract("NSE_EQ")
+    upstox = Upstox(UPSTOX_API_KEY, user_tokens[chat_id]["access_token"])
+    upstox.get_master_contract("NSE_EQ")
 
-        symbol = "RELIANCE"
-        short_ma, long_ma, rsi = get_market_analysis(upstox, symbol)
+    symbol = "RELIANCE"
+    short_ma, long_ma, rsi = get_market_analysis(upstox, symbol)
 
-        if short_ma is None or long_ma is None or rsi is None:
-            await context.bot.send_message(chat_id=chat_id, text="❌ Unable to fetch market data. Try again later.")
-            return
-
-        if short_ma > long_ma and rsi > 55:
+    if short_ma > long_ma and rsi > 55:
+        try:
             balance = upstox.get_balance()["available_margin"]
             trade_amount = min(balance * 0.5, 10000)
             price = upstox.get_live_feed(symbol)["ltp"]
             quantity = int(trade_amount / price)
 
             await context.bot.send_message(chat_id=chat_id, text=f"📊 Market Analysis:\nShort MA: {short_ma:.2f}, Long MA: {long_ma:.2f}, RSI: {rsi:.2f}")
-            await context.bot.send_message(chat_id=chat_id, text=f"🚀 Buying {quantity} shares of {symbol} at ₹{price:.2f}")
+            await context.bot.send_message(chat_id=chat_id, text=f"🚀 Entering trade: Buying {quantity} shares of {symbol} at ₹{price:.2f}")
 
             order = upstox.place_order(
                 transaction_type="BUY",
@@ -95,7 +86,7 @@ async def trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 price=price,
                 product="MIS"
             )
-            time.sleep(60)
+            time.sleep(60)  # Wait for a minute
 
             exit_price = upstox.get_live_feed(symbol)["ltp"]
             if exit_price > price * 1.02:
@@ -108,32 +99,27 @@ async def trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     price=exit_price,
                     product="MIS"
                 )
-                await context.bot.send_message(chat_id=chat_id, text=f"✅ Sold {quantity} shares at ₹{exit_price:.2f} (Profit!)")
+                await context.bot.send_message(chat_id=chat_id, text=f"✅ Trade Exited: Sold {quantity} shares at ₹{exit_price:.2f} (Profit!)")
             else:
                 await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Holding Position... Current Price: ₹{exit_price:.2f}")
 
-        else:
-            await context.bot.send_message(chat_id=chat_id, text="📉 Market conditions are not favorable. No trade taken.")
-    
-    except Exception as e:
-        logger.error(f"Trade execution failed: {str(e)}")
-        await context.bot.send_message(chat_id=chat_id, text=f"❌ Trade Failed: {str(e)}")
+        except Exception as e:
+            logger.error(f"Trade execution failed: {str(e)}")
+            await context.bot.send_message(chat_id=chat_id, text=f"❌ Trade Failed: {str(e)}")
+    else:
+        await context.bot.send_message(chat_id=chat_id, text="📉 Market conditions are not favorable. No trade taken.")
 
-# Webhook Handler
+# Webhook Setup
 @app.route("/webhook", methods=["POST"])
 def webhook():
     """Handles incoming Telegram updates"""
     try:
-        update_data = request.get_json()
-        if not update_data:
-            return "No update data", 400
-
-        update = Update.de_json(update_data, application.bot)
-        dispatcher.process_update(update)
+        update = Update.de_json(request.get_json(force=True), application.bot)
+        application.update_queue.put(update)
         return "OK", 200
     except Exception as e:
-        logger.error(f"Webhook Error: {str(e)}")
-        return f"Internal Server Error: {str(e)}", 500
+        logger.error(f"Error processing webhook: {str(e)}")
+        return "Error", 500
 
 @app.route("/callback")
 def callback():
