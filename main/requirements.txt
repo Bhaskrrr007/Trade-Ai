@@ -1,6 +1,6 @@
-telebot
-requests
 flask
+flask-cors
+python-dotenv
+telebot
 gunicorn
 upstox
-python-dotenv
