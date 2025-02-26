@@ -114,10 +114,14 @@ async def webhook():
 
 @app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
 def receive_update():
-    update = Update.de_json(request.get_json(force=True), bot)
-    dispatcher.process_update(update)
-    return "OK"
-
+    try:
+        update = Update.de_json(request.get_json(force=True), application.bot)
+        application.update_queue.put(update)
+        return "OK"
+    except Exception as e:
+        logger.error(f"Error processing webhook: {str(e)}")
+        return "Error", 500
+        
 @app.route("/callback")
 def callback():
     """Handle Upstox authentication callback"""
