@@ -1,6 +1,5 @@
 flask
-flask-cors
-python-dotenv
-telebot
-gunicorn
+python-telegram-bot
 upstox
+python-dotenv
+gunicorn
