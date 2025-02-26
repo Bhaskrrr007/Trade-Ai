@@ -5,7 +5,7 @@ import numpy as np
 from dotenv import load_dotenv
 from flask import Flask, request
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Dispatcher
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from upstox_api.api import Upstox, Session
 
 # Load environment variables
@@ -135,47 +135,34 @@ def webhook():
         logger.error(f"Webhook Error: {str(e)}")
         return f"Internal Server Error: {str(e)}", 500
 
-@app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
-def receive_update():
-    """Receives Telegram updates via webhook"""
-    try:
-        update_data = request.get_json()
-        if not update_data:
-            return "No update data", 400
-
-        update = Update.de_json(update_data, application.bot)
-        dispatcher.process_update(update)
-        return "OK", 200
-    except Exception as e:
-        logger.error(f"Error processing webhook: {str(e)}")
-        return "Error", 500
-
 @app.route("/callback")
 def callback():
     """Handle Upstox authentication callback"""
     code = request.args.get("code")
+    
+    # Check if code was received
     if not code:
         return "Authentication failed! No code received."
-
+    
     try:
         session = Session(UPSTOX_API_KEY)
-        session.set_redirect_uri(REDIRECT_URI)
+        session.set_redirect_uri(REDIRECT_URI)  # Ensure REDIRECT_URI is correct
         session.set_api_secret(UPSTOX_API_SECRET)
         session.set_code(code)
         access_token = session.retrieve_access_token()
-
+        
         # Store user tokens securely
         user_tokens[code] = {"access_token": access_token}
         return "Upstox Authentication Successful! You can now use auto-trading."
-
+    
     except Exception as e:
         logger.error(f"Authentication failed: {str(e)}")
         return f"Error: {str(e)}"
 
-# Add handlers to the bot
+# Setup Telegram Bot Handlers
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("trade", trade))
 
-# Start Flask app
+# Start Flask App
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
