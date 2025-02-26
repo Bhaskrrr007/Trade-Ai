@@ -13,7 +13,7 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("7762384377:AAGBv8XH8afYgIIN4BMj_nKOVsj-yqYbhVY")
 UPSTOX_API_KEY = os.getenv("98b99c27-06d7-4ba0-b77b-2fd134469c3f")
 UPSTOX_API_SECRET = os.getenv("vkygkh19pb")
-REDIRECT_URI = os.getenv("https://automatedtrading.onrender.com/callback")
+REDIRECT_URI = os.getenv("https://automatedtrading.onrender.com")
 
 # Initialize Flask app and Telegram bot
 app = Flask(__name__)
