@@ -15,9 +15,10 @@ UPSTOX_API_SECRET = os.getenv("vkygkh19pb")
 REDIRECT_URI = os.getenv("https://automatedtrading.onrender.com/callback")
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
+@app.route("/")
+def home():
+    return "Hello, Flask is running!"
 # Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
