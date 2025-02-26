@@ -1,12 +1,12 @@
 import os
 import logging
 import time
+import numpy as np
 from dotenv import load_dotenv
 from flask import Flask, request
-from telegram import Bot, Update
-from telegram.ext import Updater, CommandHandler, Dispatcher
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from upstox_api.api import Upstox, Session
-import numpy as np
 
 # Load environment variables
 load_dotenv()
@@ -17,7 +17,6 @@ REDIRECT_URI = os.getenv("REDIRECT_URI")
 
 # Initialize Flask app and Telegram bot
 app = Flask(__name__)
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
 # Logging Setup
 logging.basicConfig(level=logging.INFO)
@@ -45,18 +44,18 @@ def get_market_analysis(upstox, symbol):
     return short_ma, long_ma, rsi
 
 # Telegram Bot Command Handlers
-def start(update: Update, context):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send authentication link for Upstox"""
     chat_id = update.message.chat_id
     auth_url = f"https://api.upstox.com/login/authorization/dialog?response_type=code&client_id={UPSTOX_API_KEY}&redirect_uri={REDIRECT_URI}"
-    update.message.reply_text(f"Click [here]({auth_url}) to authenticate Upstox.", parse_mode="Markdown")
+    await context.bot.send_message(chat_id=chat_id, text=f"Click [here]({auth_url}) to authenticate Upstox.", parse_mode="Markdown")
 
-def trade(update: Update, context):
+async def trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Execute trade with smart analysis"""
     chat_id = update.message.chat_id
 
     if chat_id not in user_tokens or "access_token" not in user_tokens[chat_id]:
-        update.message.reply_text("Please authenticate first using /start.")
+        await context.bot.send_message(chat_id=chat_id, text="Please authenticate first using /start.")
         return
 
     upstox = Upstox(UPSTOX_API_KEY, user_tokens[chat_id]["access_token"])
@@ -72,8 +71,8 @@ def trade(update: Update, context):
             price = upstox.get_live_feed(symbol)["ltp"]
             quantity = int(trade_amount / price)
 
-            update.message.reply_text(f"📊 Market Analysis:\nShort MA: {short_ma:.2f}, Long MA: {long_ma:.2f}, RSI: {rsi:.2f}")
-            update.message.reply_text(f"🚀 Entering trade: Buying {quantity} shares of {symbol} at ₹{price:.2f}")
+            await context.bot.send_message(chat_id=chat_id, text=f"📊 Market Analysis:\nShort MA: {short_ma:.2f}, Long MA: {long_ma:.2f}, RSI: {rsi:.2f}")
+            await context.bot.send_message(chat_id=chat_id, text=f"🚀 Entering trade: Buying {quantity} shares of {symbol} at ₹{price:.2f}")
 
             order = upstox.place_order(
                 transaction_type="BUY",
@@ -84,7 +83,7 @@ def trade(update: Update, context):
                 price=price,
                 product="MIS"
             )
-            time.sleep(60)
+            time.sleep(60)  # Wait for a minute
 
             exit_price = upstox.get_live_feed(symbol)["ltp"]
             if exit_price > price * 1.02:
@@ -97,27 +96,25 @@ def trade(update: Update, context):
                     price=exit_price,
                     product="MIS"
                 )
-                update.message.reply_text(f"✅ Trade Exited: Sold {quantity} shares at ₹{exit_price:.2f} (Profit!)")
+                await context.bot.send_message(chat_id=chat_id, text=f"✅ Trade Exited: Sold {quantity} shares at ₹{exit_price:.2f} (Profit!)")
             else:
-                update.message.reply_text(f"⚠️ Holding Position... Current Price: ₹{exit_price:.2f}")
+                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Holding Position... Current Price: ₹{exit_price:.2f}")
 
         except Exception as e:
             logger.error(f"Trade execution failed: {str(e)}")
-            update.message.reply_text(f"❌ Trade Failed: {str(e)}")
+            await context.bot.send_message(chat_id=chat_id, text=f"❌ Trade Failed: {str(e)}")
     else:
-        update.message.reply_text("📉 Market conditions are not favorable. No trade taken.")
+        await context.bot.send_message(chat_id=chat_id, text="📉 Market conditions are not favorable. No trade taken.")
 
 # Webhook Setup
-updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
-dispatcher: Dispatcher = updater.dispatcher
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(CommandHandler("trade", trade))
-
-@app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(), bot)
+async def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
     dispatcher.process_update(update)
     return "OK"
+
+@app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
+def receive_update():
+    return webhook()
 
 @app.route("/callback")
 def callback():
@@ -140,7 +137,6 @@ def callback():
         logger.error(f"Authentication failed: {str(e)}")
         return f"Error: {str(e)}"
 
-# Gunicorn Entry Point
+# Main entry point
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-        
