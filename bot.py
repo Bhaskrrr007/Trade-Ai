@@ -114,7 +114,9 @@ async def webhook():
 
 @app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
 def receive_update():
-    return webhook()
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return "OK"
 
 @app.route("/callback")
 def callback():
